@@ -102,20 +102,21 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
               </svg>
-              <span>Klik atau Drag Foto/PDF di sini</span>
+              <span>Klik atau Drag File PDF di sini</span>
             </div>
           </div>
 
-          <div class="controls" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+          <div class="controls" style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <input type="file" id="file-input" accept="application/pdf,.pdf" hidden>
             <input type="file" id="file-input-image" accept="image/*" hidden>
-            <input type="file" id="file-input-pdf" accept="application/pdf,.pdf" hidden>
-            <input type="file" id="file-input" accept="*/*" hidden>
-            <button id="upload-image-btn" type="button" class="btn-primary" style="padding: 0.85rem 0.5rem; font-size: 0.95rem;">
-              <span class="icon">📷</span> Foto Struk
+            <button id="upload-btn" type="button" class="btn-primary full-width">
+              <span class="icon">📄</span> Upload File PDF
             </button>
-            <button id="upload-pdf-btn" type="button" class="btn-secondary" style="padding: 0.85rem 0.5rem; font-size: 0.95rem; border: 1px solid var(--border-color); background: rgba(255, 255, 255, 0.08);">
-              <span class="icon">📄</span> Dokumen PDF
-            </button>
+            <div style="text-align: center;">
+              <button id="upload-image-btn" type="button" style="background: none; border: none; color: var(--text-light); font-size: 0.85rem; cursor: pointer; text-decoration: underline; padding: 0.25rem;">
+                📷 Atau upload foto struk
+              </button>
+            </div>
           </div>
           
           <div id="ocr-status" class="status-bar hidden">
