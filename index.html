@@ -106,10 +106,15 @@
             </div>
           </div>
 
-          <div class="controls">
-            <input type="file" id="file-input" accept="image/*,.pdf" hidden>
-            <button id="upload-btn" class="btn-primary full-width">
-              <span class="icon">📂</span> Upload File (Foto/PDF)
+          <div class="controls" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <input type="file" id="file-input-image" accept="image/*" hidden>
+            <input type="file" id="file-input-pdf" accept="application/pdf,.pdf" hidden>
+            <input type="file" id="file-input" accept="*/*" hidden>
+            <button id="upload-image-btn" type="button" class="btn-primary" style="padding: 0.85rem 0.5rem; font-size: 0.95rem;">
+              <span class="icon">📷</span> Foto Struk
+            </button>
+            <button id="upload-pdf-btn" type="button" class="btn-secondary" style="padding: 0.85rem 0.5rem; font-size: 0.95rem; border: 1px solid var(--border-color); background: rgba(255, 255, 255, 0.08);">
+              <span class="icon">📄</span> Dokumen PDF
             </button>
           </div>
           

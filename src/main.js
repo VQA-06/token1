@@ -26,6 +26,8 @@ const resultSection = document.getElementById('result-section');
 const imagePreview = document.getElementById('image-preview');
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
+const fileInputImage = document.getElementById('file-input-image');
+const fileInputPdf = document.getElementById('file-input-pdf');
 const ocrStatus = document.getElementById('ocr-status');
 const statusText = document.getElementById('status-text');
 const installBtn = document.getElementById('install-btn');
@@ -80,6 +82,8 @@ const resDenda = document.getElementById('res-denda');
 
 // Buttons & Settings Elements
 const uploadBtn = document.getElementById('upload-btn');
+const uploadImageBtn = document.getElementById('upload-image-btn');
+const uploadPdfBtn = document.getElementById('upload-pdf-btn');
 const printBtn = document.getElementById('print-btn');
 const resetBtn = document.getElementById('reset-btn');
 const settingsBtn = document.getElementById('settings-btn');
@@ -431,32 +435,55 @@ function detectFileType(file) {
  * Event Listeners
  */
 
-uploadBtn.addEventListener('click', () => fileInput.click());
+async function handleSelectedFile(file) {
+  if (!file) return;
+  const realType = await detectFileType(file);
+  const isPdf = realType === 'application/pdf' || (realType === 'unknown' && file.name.toLowerCase().endsWith('.pdf'));
+  
+  console.log('[FileUpload] realType:', realType, 'isPdf:', isPdf, 'file.type:', file.type, 'file.name:', file.name);
+  
+  // If the file is actually an image but has application/pdf MIME type due to extension,
+  // we wrap it as a Blob with the corrected type so FileReader uses the right data URL prefix.
+  const isImageMaskedAsPdf = realType.startsWith('image/') && (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'));
+  const fileToProcess = isImageMaskedAsPdf
+    ? new Blob([file], { type: realType })
+    : file;
 
-fileInput.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    const realType = await detectFileType(file);
-    const isPdf = realType === 'application/pdf' || (realType === 'unknown' && file.name.toLowerCase().endsWith('.pdf'));
-    
-    console.log('[FileUpload] realType:', realType, 'isPdf:', isPdf, 'file.type:', file.type, 'file.name:', file.name);
-    
-    // If the file is actually an image but has application/pdf MIME type due to extension,
-    // we wrap it as a Blob with the corrected type so FileReader uses the right data URL prefix.
-    const isImageMaskedAsPdf = realType.startsWith('image/') && (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'));
-    const fileToProcess = isImageMaskedAsPdf
-      ? new Blob([file], { type: realType })
-      : file;
-
-    if (isImageMaskedAsPdf) {
-      console.log('[FileUpload] Corrected MIME type from', file.type, 'to', realType);
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => processImage(event.target.result, isPdf);
-    reader.readAsDataURL(fileToProcess);
+  if (isImageMaskedAsPdf) {
+    console.log('[FileUpload] Corrected MIME type from', file.type, 'to', realType);
   }
-});
+
+  const reader = new FileReader();
+  reader.onload = (event) => processImage(event.target.result, isPdf);
+  reader.readAsDataURL(fileToProcess);
+}
+
+if (uploadImageBtn && fileInputImage) {
+  uploadImageBtn.addEventListener('click', () => {
+    fileInputImage.value = '';
+    fileInputImage.click();
+  });
+  fileInputImage.addEventListener('change', (e) => handleSelectedFile(e.target.files[0]));
+}
+
+if (uploadPdfBtn && fileInputPdf) {
+  uploadPdfBtn.addEventListener('click', () => {
+    fileInputPdf.value = '';
+    fileInputPdf.click();
+  });
+  fileInputPdf.addEventListener('change', (e) => handleSelectedFile(e.target.files[0]));
+}
+
+if (uploadBtn && fileInput) {
+  uploadBtn.addEventListener('click', () => {
+    fileInput.value = '';
+    fileInput.click();
+  });
+}
+
+if (fileInput) {
+  fileInput.addEventListener('change', (e) => handleSelectedFile(e.target.files[0]));
+}
 
 adminSelect.addEventListener('change', () => {
   if (!currentReceiptData) return;
