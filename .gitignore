@@ -1,0 +1,12 @@
+node_modules
+dist
+dev-dist
+.vscode
+.env
+*.local
+dist-ssr
+*.log
+*.pdf
+/file/
+/ind.traineddata
+IMG_*.jpg

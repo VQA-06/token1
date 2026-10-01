@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PLN Token OCR (Paddle Server) - Pintar Scan & Cetak</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="/pdfjs/pdf.min.mjs" type="module"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="glass-header">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M13 2L3 14H12V22L22 10H13V2Z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>PLN Token OCR</span>
+      </div>
+      <div class="header-actions">
+        <button id="settings-btn" class="btn-icon">⚙️</button>
+      </div>
+    </header>
+
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h3>Pengaturan</h3>
+          <button id="close-settings" class="btn-close" aria-label="Tutup">✕</button>
+        </div>
+        <div class="form-group">
+          <label for="store-name-input">Nama Toko</label>
+          <input type="text" id="store-name-input" value="SA CELL">
+        </div>
+        
+        <div class="form-group" style="margin-top: 1rem;">
+          <label for="pc-server-url-input">URL Server PC (PaddleOCR)</label>
+          <input type="text" id="pc-server-url-input" placeholder="http://192.168.1.xxx:5174 atau Tunnel">
+          <small class="hint-text">
+            Isi dengan IP PC atau HTTPS Tunnel (Cloudflare/Ngrok) jika deploy di Vercel. 
+            Jika PC tidak aktif/offline, aplikasi <strong>otomatis beralih ke Tesseract OCR</strong>.
+          </small>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+            <button type="button" id="test-server-btn" class="btn-secondary full-width" style="padding: 0.5rem 0.75rem; font-size: 0.85rem;">
+              <span class="icon">🔌</span> Tes Koneksi PC
+            </button>
+          </div>
+          <div id="server-test-result" class="test-result-box hidden"></div>
+        </div>
+
+        <button id="save-settings" class="btn-primary full-width" style="margin-top: 1rem;">Simpan Pengaturan</button>
+        <button id="install-btn" class="btn-secondary full-width hidden" style="margin-top: 0.75rem;">
+          <span class="icon">✨</span> Pasang Aplikasi (PWA)
+        </button>
+      </div>
+    </div>
+
+    <main>
+      <section id="scanner-section" class="card fade-in">
+        <div class="card-content">
+          <div class="card-header-row">
+            <div class="title-with-badge">
+              <h1>Scan Struk</h1>
+              <button type="button" id="server-status-badge" class="server-badge badge-checking" title="Klik untuk refresh status Server PC / Tesseract">
+                <span class="badge-dot"></span>
+                <span id="server-status-text">Cek Server...</span>
+              </button>
+            </div>
+            <div class="auto-print-toggle" title="Auto Print">
+              <span class="toggle-label">Auto Print</span>
+              <label class="switch" for="auto-print-switch">
+                <input type="checkbox" id="auto-print-switch">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="mode-switch-container">
+            <div class="dropdown">
+              <button id="mode-pln-dropdown" class="mode-btn active">
+                <span id="pln-label">Token PLN</span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div id="pln-menu" class="dropdown-menu hidden">
+                <button class="dropdown-item" data-mode="token">Token PLN</button>
+                <button class="dropdown-item" data-mode="tagihan-pln">Tagihan Listrik</button>
+              </div>
+            </div>
+            <button id="mode-payment" class="mode-btn">PDAM/Lainnya</button>
+          </div>
+          
+          <div class="scanner-container">
+            <div id="scanner-overlay" class="hidden">
+              <div class="scanner-frame"></div>
+            </div>
+            <img id="image-preview" class="hidden">
+            <div id="drop-zone" class="drop-zone">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+              </svg>
+              <span>Klik atau Drag Foto/PDF di sini</span>
+            </div>
+          </div>
+
+          <div class="controls">
+            <input type="file" id="file-input" accept="image/*,.pdf" hidden>
+            <button id="upload-btn" class="btn-primary full-width">
+              <span class="icon">📂</span> Upload File (Foto/PDF)
+            </button>
+          </div>
+          
+          <div id="ocr-status" class="status-bar hidden">
+            <div class="spinner"></div>
+            <span id="status-text">Memproses OCR...</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="result-section" class="card hidden fade-in">
+        <div class="card-content">
+          <div class="card-header">
+            <h2>Detail Transaksi</h2>
+          </div>
+          
+          <div class="receipt-preview" id="receipt-data">
+            <div class="receipt-item">
+              <label>Nomor Token <span style="font-size:0.7rem;font-weight:normal;color:var(--text-light);">(klik untuk edit)</span></label>
+              <div class="token-display" id="res-token" contenteditable="true" spellcheck="false" title="Klik untuk mengedit nomor token">---- ---- ---- ---- ----</div>
+            </div>
+              <div class="receipt-grid">
+              <div class="receipt-item">
+                <label>ID Pelanggan</label>
+                <div class="value" id="res-idpel" contenteditable="true" spellcheck="false" title="Klik untuk edit ID Pelanggan">-</div>
+              </div>
+              
+              <div class="receipt-item">
+                <label>Nama</label>
+                <div class="value" id="res-nama" contenteditable="true" spellcheck="false" title="Klik untuk edit Nama">-</div>
+              </div>
+
+              <div class="receipt-item hidden" id="item-periode">
+                <label>Periode</label>
+                <div class="value" id="res-periode">-</div>
+              </div>
+
+              <div class="receipt-item hidden" id="item-lokasi">
+                <label>Lokasi</label>
+                <div class="value" id="res-lokasi">-</div>
+              </div>
+
+              <div class="receipt-item hidden" id="item-nopesanan">
+                <label>No Pesanan</label>
+                <div class="value" id="res-nopesanan">-</div>
+              </div>
+
+              <div class="receipt-item">
+                <label>Nominal</label>
+                <div class="value" id="res-nominal">-</div>
+              </div>
+
+              <!-- Token Specific Fields -->
+              <div class="receipt-item">
+                <label>Tarif/Daya</label>
+                <div class="value" id="res-tarif">-</div>
+              </div>
+              <div class="receipt-item">
+                <label>KWh</label>
+                <div class="value" id="res-kwh">-</div>
+              </div>
+              <div class="receipt-item">
+                <label>PPN</label>
+                <div class="value" id="res-ppn">-</div>
+              </div>
+              <div class="receipt-item">
+                <label>ANGS/MAT</label>
+                <div class="value" id="res-angsmat">-</div>
+              </div>
+              
+              <div class="receipt-item hidden" id="item-stand">
+                <label>Stand Meter</label>
+                <div class="value" id="res-stand">-</div>
+              </div>
+              <div class="receipt-item hidden" id="item-denda">
+                <label>Denda</label>
+                <div class="value" id="res-denda">-</div>
+              </div>
+
+              <!-- Admin & Total -->
+              <div class="receipt-item">
+                <label>Admin</label>
+                <div class="admin-selector-compact">
+                  <select id="res-admin-select" class="select-compact">
+                    <option value="2000">Rp 2.000</option>
+                    <option value="3000" selected>Rp 3.000</option>
+                    <option value="4000">Rp 4.000</option>
+                  </select>
+                </div>
+              </div>
+              <div class="receipt-item total-item">
+                <label>Total Bayar</label>
+                <div class="value" id="res-total">-</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="print-btn" class="btn-primary full-width">
+              <span class="icon">🖨️</span> Cetak Struk
+            </button>
+            <button id="reset-btn" class="btn-ghost full-width">Ulangi Scan</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+  
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
