@@ -63,7 +63,10 @@ export async function checkPcServerHealth(serverUrl = getPcServerUrl(), timeoutM
     const response = await fetch(url, {
       method: 'GET',
       signal: controller.signal,
-      headers: { 'Accept': 'application/json' }
+      headers: { 
+        'Accept': 'application/json',
+        'bypass-tunnel-reminder': 'true' // Bypass Localtunnel warning page
+      }
     });
     clearTimeout(timeoutId);
 
@@ -150,7 +153,10 @@ export async function processReceipt(imageSource, mode = 'token', onStatusUpdate
 
     const response = await fetch(paddleEndpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'bypass-tunnel-reminder': 'true' // Bypass Localtunnel warning page
+      },
       body: JSON.stringify({ image: optimizedSource }),
       signal: controller.signal
     });
