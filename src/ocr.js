@@ -68,8 +68,13 @@ export async function checkPcServerHealth(serverUrl = getPcServerUrl(), timeoutM
     clearTimeout(timeoutId);
 
     if (response.ok) {
-      const data = await response.json().catch(() => ({}));
-      return { online: true, engine: data.engine || 'PaddleOCR Native PC Server' };
+      // Must validate JSON body - Vercel rewrites /api/health to index.html (HTTP 200 but HTML)
+      // Only treat as online if the JSON body explicitly has online: true
+      const data = await response.json().catch(() => null);
+      if (data && data.online === true) {
+        return { online: true, engine: data.engine || 'PaddleOCR Native PC Server' };
+      }
+      return { online: false, error: 'URL bukan Server PC yang valid (tidak ada respons JSON yang sesuai)' };
     }
     return { online: false, error: `HTTP ${response.status}` };
   } catch (err) {

@@ -94,11 +94,13 @@ const serverTestResult = document.getElementById('server-test-result');
 /**
  * Check and refresh server status badge
  */
-export async function refreshServerStatus(showToastFeedback = false) {
+export async function refreshServerStatus(showToastFeedback = false, isBackground = false) {
   if (!serverStatusBadge || !serverStatusText) return;
 
-  serverStatusBadge.className = 'server-badge badge-checking';
-  serverStatusText.textContent = 'Mengecek PC...';
+  if (!isBackground) {
+    serverStatusBadge.className = 'server-badge badge-checking';
+    serverStatusText.textContent = 'Mengecek PC...';
+  }
 
   const health = await checkPcServerHealth(getPcServerUrl(), 3000);
   if (health.online) {
@@ -118,9 +120,9 @@ if (serverStatusBadge) {
   serverStatusBadge.addEventListener('click', () => refreshServerStatus(true));
 }
 
-// Initial status check and periodic check every 30 seconds
+// Initial status check and periodic check every 3 seconds (real-time)
 refreshServerStatus();
-setInterval(() => refreshServerStatus(), 30000);
+setInterval(() => refreshServerStatus(false, true), 3000);
 
 
 
