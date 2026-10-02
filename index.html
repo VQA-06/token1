@@ -42,12 +42,16 @@
           <label for="pc-server-url-input">URL Server PC (PaddleOCR)</label>
           <input type="text" id="pc-server-url-input" placeholder="http://192.168.1.xxx:5174 atau Tunnel">
           <small class="hint-text">
-            Isi dengan IP PC atau HTTPS Tunnel (Cloudflare/Ngrok) jika deploy di Vercel. 
-            Jika PC tidak aktif/offline, aplikasi <strong>otomatis beralih ke Tesseract OCR</strong>.
+            Kosongkan untuk <strong>auto-discovery otomatis</strong> (cari server di jaringan WiFi yang sama).
+            Isi manual jika menggunakan IP statis atau HTTPS Tunnel (Cloudflare/Ngrok).
+            Jika PC offline, aplikasi <strong>otomatis beralih ke Tesseract OCR</strong>.
           </small>
           <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-            <button type="button" id="test-server-btn" class="btn-secondary full-width" style="padding: 0.5rem 0.75rem; font-size: 0.85rem;">
-              <span class="icon">🔌</span> Tes Koneksi PC
+            <button type="button" id="test-server-btn" class="btn-secondary" style="flex: 1; padding: 0.5rem 0.75rem; font-size: 0.85rem;">
+              <span class="icon">🔌</span> Tes Koneksi
+            </button>
+            <button type="button" id="discover-server-btn" class="btn-secondary" style="flex: 1; padding: 0.5rem 0.75rem; font-size: 0.85rem;">
+              <span class="icon">🔍</span> Cari Otomatis
             </button>
           </div>
           <div id="server-test-result" class="test-result-box hidden"></div>

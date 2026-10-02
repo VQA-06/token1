@@ -1,6 +1,7 @@
 import http from 'http';
 import os from 'os';
 import { PaddleOcrService } from 'ppu-paddle-ocr';
+import { Bonjour } from 'bonjour-service';
 
 const PORT = process.env.PORT || 5174;
 
@@ -80,6 +81,20 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Auto-Discovery Endpoint: returns IP addresses of this PC
+  if (req.method === 'GET' && req.url === '/api/discover') {
+    const ips = getLocalIpAddresses();
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({
+      service: 'paddleocr-server',
+      port: PORT,
+      ips,
+      hostname: os.hostname()
+    }));
+    return;
+  }
+
   // Paddle OCR Recognition Endpoint
   if (req.method === 'POST' && req.url === '/api/paddle-ocr') {
     const chunks = [];
@@ -146,9 +161,10 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('====================================================');
   console.log('🚀 PADDLEOCR PC SERVER SIAP DIGUNAKAN');
   console.log('====================================================');
-  console.log(`- Localhost : http://localhost:${PORT}`);
+  console.log(`- Localhost      : http://localhost:${PORT}`);
+  console.log(`- mDNS (auto)    : http://paddleocr.local:${PORT}`);
   ips.forEach(ip => {
-    console.log(`- Local Wi-Fi: http://${ip}:${PORT}`);
+    console.log(`- Local Wi-Fi    : http://${ip}:${PORT}`);
   });
   console.log('----------------------------------------------------');
   console.log('Koneksi dari Vercel:');
@@ -157,4 +173,22 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('   npx localtunnel --port ' + PORT + '  atau  cloudflared tunnel --url http://localhost:' + PORT);
   console.log('3. Jika PC ini mati/offline, aplikasi Vercel akan OTOMATIS beralih ke Tesseract OCR!');
   console.log('====================================================');
+
+  // Broadcast mDNS so app can find server as paddleocr.local
+  try {
+    const bonjour = new Bonjour();
+    bonjour.publish({
+      name: 'PaddleOCR Token Server',
+      type: 'paddleocr',
+      port: Number(PORT),
+      txt: { version: '1.0', service: 'paddleocr-server' }
+    });
+    console.log(`[mDNS] Service terdaftar: paddleocr.local:${PORT} (auto-discovery aktif)`);
+
+    // Graceful shutdown
+    process.on('SIGINT', () => { bonjour.unpublishAll(() => process.exit()); });
+    process.on('SIGTERM', () => { bonjour.unpublishAll(() => process.exit()); });
+  } catch (e) {
+    console.warn('[mDNS] Gagal broadcast mDNS (tidak kritis):', e.message);
+  }
 });

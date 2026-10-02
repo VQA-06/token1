@@ -1,6 +1,7 @@
 import { processReceipt, processPdf, preprocessImage, getPcServerUrl, setPcServerUrl, checkPcServerHealth } from './ocr';
 import { getPaddleOcrService } from './paddleOcr';
 import { printViaRawBT } from './rawbt';
+import { discoverServer, clearDiscoveryCache } from './serverDiscovery';
 // import { registerSW } from 'virtual:pwa-register';
 
 // State
@@ -102,13 +103,37 @@ export async function refreshServerStatus(showToastFeedback = false, isBackgroun
     serverStatusText.textContent = 'Mengecek PC...';
   }
 
-  const health = await checkPcServerHealth(getPcServerUrl(), 3000);
+  const currentUrl = getPcServerUrl();
+  const health = await checkPcServerHealth(currentUrl, 3000);
   if (health.online) {
     serverStatusBadge.className = 'server-badge badge-online';
     serverStatusText.textContent = 'PC: PaddleOCR Online';
     serverStatusBadge.title = 'Server PC aktif & terhubung! PaddleOCR akan digunakan sebagai mesin utama. Klik untuk refresh.';
     if (showToastFeedback) showToast('🟢 Server PC Online (PaddleOCR Siap)', 2500);
   } else {
+    // Jika tidak ada URL manual tersimpan, coba auto-discovery
+    const hasManualUrl = !!localStorage.getItem('pcServerUrl');
+    if (!hasManualUrl && !isBackground) {
+      serverStatusBadge.className = 'server-badge badge-checking';
+      serverStatusText.textContent = '🔍 Mencari server...';
+      serverStatusBadge.title = 'Sedang mencari server di jaringan lokal...';
+
+      const discovered = await discoverServer((pct, msg) => {
+        if (serverStatusText) serverStatusText.textContent = `🔍 ${msg}`;
+      });
+
+      if (discovered) {
+        // Simpan URL yang ditemukan
+        setPcServerUrl(discovered);
+        if (pcServerUrlInput) pcServerUrlInput.value = discovered;
+        serverStatusBadge.className = 'server-badge badge-online';
+        serverStatusText.textContent = 'PC: PaddleOCR Online';
+        serverStatusBadge.title = `Auto-discovered: ${discovered}. Klik untuk refresh.`;
+        if (showToastFeedback || true) showToast(`✅ Server ditemukan otomatis: ${discovered}`, 4000);
+        return;
+      }
+    }
+
     serverStatusBadge.className = 'server-badge badge-offline';
     serverStatusText.textContent = 'PC Offline (Tesseract Backup)';
     serverStatusBadge.title = `Server PC tidak terhubung (${health.error}). Tesseract OCR otomatis aktif sebagai cadangan. Klik untuk refresh.`;
@@ -561,7 +586,7 @@ if (testServerBtn) {
 
     const res = await checkPcServerHealth(testUrl, 4000);
     testServerBtn.disabled = false;
-    testServerBtn.innerHTML = '<span class="icon">🔌</span> Tes Koneksi PC';
+    testServerBtn.innerHTML = '<span class="icon">🔌</span> Tes Koneksi';
 
     if (res.online) {
       serverTestResult.className = 'test-result-box success';
@@ -569,6 +594,40 @@ if (testServerBtn) {
     } else {
       serverTestResult.className = 'test-result-box error';
       serverTestResult.innerHTML = `❌ <strong>Gagal terhubung:</strong> ${res.error}.<br><span style="font-size:0.75rem;">Pastikan server di PC aktif (<code>npm run server</code>). Jika aplikasi di Vercel, pastikan memakai HTTPS tunnel jika diblokir mixed content.</span>`;
+    }
+  });
+}
+
+const discoverServerBtn = document.getElementById('discover-server-btn');
+if (discoverServerBtn) {
+  discoverServerBtn.addEventListener('click', async () => {
+    discoverServerBtn.disabled = true;
+    discoverServerBtn.innerHTML = '<span class="icon">⏳</span> Mencari...';
+    serverTestResult.classList.remove('hidden');
+    serverTestResult.className = 'test-result-box';
+    serverTestResult.textContent = 'Memulai pencarian server di jaringan lokal...';
+
+    // Reset cache agar scan ulang dari awal
+    clearDiscoveryCache();
+    if (pcServerUrlInput) pcServerUrlInput.value = '';
+    setPcServerUrl('');
+
+    const found = await discoverServer((pct, msg) => {
+      serverTestResult.textContent = `🔍 ${msg} (${pct}%)`;
+    });
+
+    discoverServerBtn.disabled = false;
+    discoverServerBtn.innerHTML = '<span class="icon">🔍</span> Cari Otomatis';
+
+    if (found) {
+      setPcServerUrl(found);
+      if (pcServerUrlInput) pcServerUrlInput.value = found;
+      serverTestResult.className = 'test-result-box success';
+      serverTestResult.innerHTML = `✅ <strong>Server ditemukan!</strong><br>URL: <code>${found}</code><br>Klik "Simpan Pengaturan" untuk menyimpan.`;
+      refreshServerStatus(false);
+    } else {
+      serverTestResult.className = 'test-result-box error';
+      serverTestResult.innerHTML = `❌ <strong>Server tidak ditemukan</strong> di jaringan lokal.<br><span style="font-size:0.75rem;">Pastikan PC dan HP terhubung ke WiFi yang sama, dan server PC aktif (<code>npm run server</code>).</span>`;
     }
   });
 }
