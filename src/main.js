@@ -105,39 +105,72 @@ export async function refreshServerStatus(showToastFeedback = false, isBackgroun
 
   const currentUrl = getPcServerUrl();
   const health = await checkPcServerHealth(currentUrl, 3000);
+
   if (health.online) {
+    // Reset flag offline-count saat berhasil
+    refreshServerStatus._offlineCount = 0;
     serverStatusBadge.className = 'server-badge badge-online';
     serverStatusText.textContent = 'PC: PaddleOCR Online';
     serverStatusBadge.title = 'Server PC aktif & terhubung! PaddleOCR akan digunakan sebagai mesin utama. Klik untuk refresh.';
     if (showToastFeedback) showToast('🟢 Server PC Online (PaddleOCR Siap)', 2500);
-  } else {
-    // Jika tidak ada URL manual tersimpan, coba auto-discovery
-    const hasManualUrl = !!localStorage.getItem('pcServerUrl');
-    if (!hasManualUrl && !isBackground) {
-      serverStatusBadge.className = 'server-badge badge-checking';
-      serverStatusText.textContent = '🔍 Mencari server...';
-      serverStatusBadge.title = 'Sedang mencari server di jaringan lokal...';
+    return;
+  }
 
-      const discovered = await discoverServer((pct, msg) => {
-        if (serverStatusText) serverStatusText.textContent = `🔍 ${msg}`;
-      });
+  // Server offline — tandai dan tampilkan status sementara
+  refreshServerStatus._offlineCount = (refreshServerStatus._offlineCount || 0) + 1;
 
-      if (discovered) {
-        // Simpan URL yang ditemukan
-        setPcServerUrl(discovered);
-        if (pcServerUrlInput) pcServerUrlInput.value = discovered;
-        serverStatusBadge.className = 'server-badge badge-online';
-        serverStatusText.textContent = 'PC: PaddleOCR Online';
-        serverStatusBadge.title = `Auto-discovered: ${discovered}. Klik untuk refresh.`;
-        if (showToastFeedback || true) showToast(`✅ Server ditemukan otomatis: ${discovered}`, 4000);
-        return;
-      }
-    }
+  // Hindari scan concurrent (scan hanya 1 instance sekaligus)
+  if (refreshServerStatus._isDiscovering) {
+    // Sudah ada scan berjalan, cukup update badge
+    serverStatusBadge.className = 'server-badge badge-checking';
+    serverStatusText.textContent = '🔍 Mencari server...';
+    return;
+  }
 
+  // Trigger discovery setelah offline 2x berturut-turut (hindari false-positive 1 gagal saja)
+  const shouldDiscover = refreshServerStatus._offlineCount >= 2;
+
+  if (!shouldDiscover) {
     serverStatusBadge.className = 'server-badge badge-offline';
     serverStatusText.textContent = 'PC Offline (Tesseract Backup)';
-    serverStatusBadge.title = `Server PC tidak terhubung (${health.error}). Tesseract OCR otomatis aktif sebagai cadangan. Klik untuk refresh.`;
+    serverStatusBadge.title = `Server tidak merespons. Tesseract OCR aktif sebagai cadangan. Klik untuk refresh.`;
     if (showToastFeedback) showToast('🟡 Server PC Offline. Tesseract Backup aktif.', 3000);
+    return;
+  }
+
+  // Mulai auto-discovery
+  refreshServerStatus._isDiscovering = true;
+  refreshServerStatus._offlineCount = 0;
+
+  // Hapus URL lama yang sudah tidak valid agar discovery berjalan fresh
+  clearDiscoveryCache();
+  setPcServerUrl('');
+  if (pcServerUrlInput) pcServerUrlInput.value = '';
+
+  serverStatusBadge.className = 'server-badge badge-checking';
+  serverStatusText.textContent = '🔍 Mencari server...';
+  serverStatusBadge.title = 'IP server berubah, sedang mencari ulang di jaringan lokal...';
+
+  try {
+    const discovered = await discoverServer((pct, msg) => {
+      if (serverStatusText) serverStatusText.textContent = `🔍 ${msg}`;
+    });
+
+    if (discovered) {
+      setPcServerUrl(discovered);
+      if (pcServerUrlInput) pcServerUrlInput.value = discovered;
+      serverStatusBadge.className = 'server-badge badge-online';
+      serverStatusText.textContent = 'PC: PaddleOCR Online';
+      serverStatusBadge.title = `Server ditemukan otomatis: ${discovered}. Klik untuk refresh.`;
+      showToast(`✅ Server ditemukan: ${discovered}`, 4000);
+    } else {
+      serverStatusBadge.className = 'server-badge badge-offline';
+      serverStatusText.textContent = 'PC Offline (Tesseract Backup)';
+      serverStatusBadge.title = 'Server tidak ditemukan di jaringan lokal. Tesseract aktif. Klik untuk coba lagi.';
+      if (showToastFeedback) showToast('🟡 Server tidak ditemukan. Tesseract Backup aktif.', 3000);
+    }
+  } finally {
+    refreshServerStatus._isDiscovering = false;
   }
 }
 
@@ -148,6 +181,7 @@ if (serverStatusBadge) {
 // Initial status check and periodic check every 3 seconds (real-time)
 refreshServerStatus();
 setInterval(() => refreshServerStatus(false, true), 3000);
+
 
 
 
