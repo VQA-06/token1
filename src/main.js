@@ -26,8 +26,6 @@ const resultSection = document.getElementById('result-section');
 const imagePreview = document.getElementById('image-preview');
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
-const fileInputImage = document.getElementById('file-input-image');
-const fileInputPdf = document.getElementById('file-input-pdf');
 const ocrStatus = document.getElementById('ocr-status');
 const statusText = document.getElementById('status-text');
 const installBtn = document.getElementById('install-btn');
@@ -82,8 +80,6 @@ const resDenda = document.getElementById('res-denda');
 
 // Buttons & Settings Elements
 const uploadBtn = document.getElementById('upload-btn');
-const uploadImageBtn = document.getElementById('upload-image-btn');
-const uploadPdfBtn = document.getElementById('upload-pdf-btn');
 const printBtn = document.getElementById('print-btn');
 const resetBtn = document.getElementById('reset-btn');
 const settingsBtn = document.getElementById('settings-btn');
@@ -458,30 +454,11 @@ async function handleSelectedFile(file) {
   reader.readAsDataURL(fileToProcess);
 }
 
-if (uploadImageBtn && fileInputImage) {
-  uploadImageBtn.addEventListener('click', () => {
-    fileInputImage.value = '';
-    fileInputImage.click();
-  });
-  fileInputImage.addEventListener('change', (e) => handleSelectedFile(e.target.files[0]));
-}
-
-if (uploadPdfBtn && fileInputPdf) {
-  uploadPdfBtn.addEventListener('click', () => {
-    fileInputPdf.value = '';
-    fileInputPdf.click();
-  });
-  fileInputPdf.addEventListener('change', (e) => handleSelectedFile(e.target.files[0]));
-}
-
 if (uploadBtn && fileInput) {
   uploadBtn.addEventListener('click', () => {
     fileInput.value = '';
     fileInput.click();
   });
-}
-
-if (fileInput) {
   fileInput.addEventListener('change', (e) => handleSelectedFile(e.target.files[0]));
 }
 
