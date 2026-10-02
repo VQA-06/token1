@@ -433,7 +433,7 @@ async function processImage(source, isPdf = false) {
 
     showResult(data);
     if (data.usedEngine) {
-      showToast(data.isServerOnline ? `🚀 ${data.usedEngine}` : `⚡ ${data.usedEngine}`, 4000);
+      showToast(data.isServerOnline ? `🚀 ${data.usedEngine}` : `⚡ ${data.usedEngine}`, 2000);
     }
 
 
@@ -665,12 +665,16 @@ function toggleElement(element, visible) {
   }
 }
 
-function showToast(message, duration = 3000) {
+let toastTimer = null;
+function showToast(message, duration = 2000) {
   const toast = document.getElementById('toast');
   if (toast) {
+    if (toastTimer) clearTimeout(toastTimer);
     toast.textContent = message;
     toast.classList.remove('hidden');
-    setTimeout(() => toast.classList.add('hidden'), duration);
+    toastTimer = setTimeout(() => {
+      toast.classList.add('hidden');
+    }, duration);
   }
 }
 

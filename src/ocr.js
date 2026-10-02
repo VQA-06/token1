@@ -175,7 +175,7 @@ export async function processReceipt(imageSource, mode = 'token', onStatusUpdate
 
     ocrText = json.text;
     duration = json.durationMs || 0;
-    engineUsed = `PaddleOCR Server PC (${duration} ms)`;
+    engineUsed = `PaddleOCR (${duration} ms)`;
     serverAvailable = true;
     console.log(`[OCR Client] Respon berhasil dari Server PC (${duration} ms)`);
   } catch (error) {
@@ -214,7 +214,7 @@ export async function processReceipt(imageSource, mode = 'token', onStatusUpdate
           if (json.success) {
             ocrText = json.text;
             duration = json.durationMs || 0;
-            engineUsed = `PaddleOCR Server PC (${duration} ms)`;
+            engineUsed = `PaddleOCR (${duration} ms)`;
             serverAvailable = true;
             console.log(`[OCR Client] Berhasil diproses oleh Server PC IP baru (${duration} ms)`);
           }
@@ -241,7 +241,7 @@ export async function processReceipt(imageSource, mode = 'token', onStatusUpdate
 
       ocrText = tesseractResult.text;
       duration = tesseractResult.durationMs;
-      engineUsed = `Tesseract OCR (Backup - ${duration} ms)`;
+      engineUsed = `Tesseract (${duration} ms)`;
     } catch (tessErr) {
       console.error('[OCR Client] Tesseract Error:', tessErr);
       throw new Error(`Server PC offline dan Tesseract OCR gagal: ${tessErr.message}`);

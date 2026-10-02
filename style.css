@@ -300,16 +300,39 @@ button {
 
 .toast {
   position: fixed;
-  bottom: 2rem;
+  top: 1.15rem;
   left: 50%;
   transform: translateX(-50%);
-  background: #1E293B;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border-radius: 99px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  transition: all 0.3s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #F8FAFC;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: 0.015em;
+  padding: 0.38rem 0.88rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.1);
+  z-index: 9999;
+  pointer-events: none;
+  max-width: 88vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast.hidden {
+  opacity: 0;
+  transform: translate(-50%, -8px) scale(0.96);
+  pointer-events: none;
+  visibility: hidden;
 }
 
 .hidden {
