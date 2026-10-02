@@ -9,7 +9,7 @@
 
 const SERVER_PORT = 5174;
 const HEALTH_TIMEOUT_MS = 1500;
-const SCAN_TIMEOUT_MS = 650;
+const SCAN_TIMEOUT_MS = 550;
 const DISCOVERY_CACHE_KEY = 'discoveredServerUrl';
 const DISCOVERY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit
 
@@ -107,7 +107,7 @@ async function getLocalSubnet() {
  */
 async function scanSubnet(subnet, port = SERVER_PORT, onProgress = null, excludeUrl = null) {
   console.log(`[Discovery] Scanning subnet ${subnet}.1-254 pada port ${port}...`);
-  const BATCH_SIZE = 35;
+  const BATCH_SIZE = 50;
   const total = 254;
 
   for (let start = 1; start <= total; start += BATCH_SIZE) {

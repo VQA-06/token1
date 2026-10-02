@@ -1,5 +1,6 @@
 import { runPaddleOcr, getPaddleOcrService } from './paddleOcr.js';
 import { runTesseractOcr } from './tesseractOcr.js';
+import { discoverServer } from './serverDiscovery.js';
 
 // PDF.js is loaded via CDN in index.html to avoid bundling issues
 // The library exposes 'pdfjsLib' to window
@@ -178,9 +179,52 @@ export async function processReceipt(imageSource, mode = 'token', onStatusUpdate
     serverAvailable = true;
     console.log(`[OCR Client] Respon berhasil dari Server PC (${duration} ms)`);
   } catch (error) {
-    console.warn('[OCR Client] Server PC Offline / Tidak Terjangkau:', error.message);
+    console.warn('[OCR Client] Server PC gagal dihubungi di', paddleEndpoint, error.message);
     serverAvailable = false;
-    if (typeof window !== 'undefined' && typeof window.__triggerServerAutoDiscovery === 'function') {
+
+    // Otomatis cari IP server baru jika PC berubah IP tanpa perlu tombol / campur tangan pengguna
+    try {
+      if (onStatusUpdate) onStatusUpdate('🔍 Mendeteksi IP baru Server PC otomatis...');
+      const discoveredUrl = await discoverServer(null, { failedUrl: serverUrl });
+      if (discoveredUrl) {
+        console.log('[OCR Client] Server PC ditemukan di IP baru:', discoveredUrl);
+        setPcServerUrl(discoveredUrl);
+        if (typeof window !== 'undefined' && typeof window.__onServerDiscovered === 'function') {
+          window.__onServerDiscovered(discoveredUrl);
+        }
+
+        if (onStatusUpdate) onStatusUpdate('Mengirim ke IP baru Server PC...');
+        const retryEndpoint = `${discoveredUrl}/api/paddle-ocr`;
+        const retryController = new AbortController();
+        const retryTimeout = setTimeout(() => retryController.abort(), 6500);
+
+        const retryRes = await fetch(retryEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'bypass-tunnel-reminder': 'true'
+          },
+          body: JSON.stringify({ image: optimizedSource }),
+          signal: retryController.signal
+        });
+        clearTimeout(retryTimeout);
+
+        if (retryRes.ok) {
+          const json = await retryRes.json();
+          if (json.success) {
+            ocrText = json.text;
+            duration = json.durationMs || 0;
+            engineUsed = `PaddleOCR Server PC (${duration} ms)`;
+            serverAvailable = true;
+            console.log(`[OCR Client] Berhasil diproses oleh Server PC IP baru (${duration} ms)`);
+          }
+        }
+      }
+    } catch (discoveryErr) {
+      console.warn('[OCR Client] Auto-scan IP baru tidak menemukan server:', discoveryErr.message);
+    }
+
+    if (!serverAvailable && typeof window !== 'undefined' && typeof window.__triggerServerAutoDiscovery === 'function') {
       window.__triggerServerAutoDiscovery();
     }
   }

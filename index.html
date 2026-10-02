@@ -40,21 +40,10 @@
         
         <div class="form-group" style="margin-top: 1rem;">
           <label for="pc-server-url-input">URL Server PC (PaddleOCR)</label>
-          <input type="text" id="pc-server-url-input" placeholder="http://192.168.1.xxx:5174 atau Tunnel">
+          <input type="text" id="pc-server-url-input" placeholder="Otomatis (http://192.168.x.x:5174)">
           <small class="hint-text">
-            Kosongkan untuk <strong>auto-discovery otomatis</strong> (cari server di jaringan WiFi yang sama).
-            Isi manual jika menggunakan IP statis atau HTTPS Tunnel (Cloudflare/Ngrok).
-            Jika PC offline, aplikasi <strong>otomatis beralih ke Tesseract OCR</strong>.
+            ⚡ <strong>100% Otomatis:</strong> Aplikasi memindai dan menghubungkan IP server PC di jaringan WiFi secara mandiri. Jika IP PC berubah atau server sempat mati, aplikasi akan mencari dan memperbaruinya secara otomatis tanpa klik tombol apapun.
           </small>
-          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-            <button type="button" id="test-server-btn" class="btn-secondary" style="flex: 1; padding: 0.5rem 0.75rem; font-size: 0.85rem;">
-              <span class="icon">🔌</span> Tes Koneksi
-            </button>
-            <button type="button" id="discover-server-btn" class="btn-secondary" style="flex: 1; padding: 0.5rem 0.75rem; font-size: 0.85rem;">
-              <span class="icon">🔍</span> Cari Otomatis
-            </button>
-          </div>
-          <div id="server-test-result" class="test-result-box hidden"></div>
         </div>
 
         <button id="save-settings" class="btn-primary full-width" style="margin-top: 1rem;">Simpan Pengaturan</button>
