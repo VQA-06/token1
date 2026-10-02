@@ -1,20 +1,21 @@
 /**
  * serverDiscovery.js
- * Auto-discovery untuk PaddleOCR Server di jaringan lokal.
+ * Ultra-fast Auto-Discovery untuk PaddleOCR Server di jaringan lokal.
  * 
- * Strategi:
- * 1. Coba connect ke paddleocr.local (via mDNS broadcast dari server)
- * 2. Fallback: scan subnet lokal (192.168.x.x) mencari server aktif secara otomatis
+ * Dioptimalkan untuk gateway 192.168.0.1:
+ * - Prioritas utama subnet: 192.168.0.x
+ * - Rentang IP DHCP paling umum (100-150 & 2-50) dipindai di batch pertama
+ * - Fast-resolve: langsung mengembalikan IP yang merespons dalam hitungan milidetik tanpa menunggu timeout IP lain
  */
 
 const SERVER_PORT = 5174;
-const HEALTH_TIMEOUT_MS = 1500;
-const SCAN_TIMEOUT_MS = 550;
+const HEALTH_TIMEOUT_MS = 1200;
+const SCAN_TIMEOUT_MS = 450; // Timeout cukup 450ms untuk jaringan WiFi lokal
 const DISCOVERY_CACHE_KEY = 'discoveredServerUrl';
 const DISCOVERY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit
 
 /**
- * Ekstrak subnet dari URL IP (contoh: http://192.168.1.50:5174 -> 192.168.1)
+ * Ekstrak subnet dari URL IP (contoh: http://192.168.0.102:5174 -> 192.168.0)
  */
 export function extractSubnet(url) {
   if (!url) return null;
@@ -64,12 +65,12 @@ export async function probeServer(baseUrl, timeoutMs = HEALTH_TIMEOUT_MS) {
 }
 
 /**
- * Coba via mDNS hostname (paddleocr.local)
+ * Coba via mDNS hostname (paddleocr.local) secara cepat
  */
 async function tryMdns(port = SERVER_PORT) {
   const url = `http://paddleocr.local:${port}`;
   console.log('[Discovery] Mencoba mDNS:', url);
-  const ok = await probeServer(url, 1200);
+  const ok = await probeServer(url, 400); // 400ms cepat
   if (ok) {
     console.log('[Discovery] Server ditemukan via mDNS:', url);
     return url;
@@ -78,7 +79,7 @@ async function tryMdns(port = SERVER_PORT) {
 }
 
 /**
- * Deteksi subnet dari IP browser menggunakan WebRTC
+ * Deteksi subnet dari IP browser menggunakan WebRTC (cepat, maks 350ms)
  */
 async function getLocalSubnet() {
   return new Promise((resolve) => {
@@ -86,7 +87,7 @@ async function getLocalSubnet() {
       const pc = new RTCPeerConnection({ iceServers: [] });
       pc.createDataChannel('');
       pc.createOffer().then(o => pc.setLocalDescription(o));
-      const timeout = setTimeout(() => { pc.close(); resolve(null); }, 2000);
+      const timeout = setTimeout(() => { pc.close(); resolve(null); }, 350);
       pc.onicecandidate = (e) => {
         if (!e || !e.candidate) return;
         const match = /(\d+\.\d+\.\d+)\.\d+/.exec(e.candidate.candidate);
@@ -103,42 +104,96 @@ async function getLocalSubnet() {
 }
 
 /**
- * Scan subnet untuk mencari server PaddleOCR
+ * Buat urutan IP prioritas untuk subnet lokal (khususnya 192.168.0.x / 192.168.1.x)
+ * Router umum (TP-Link, D-Link, Tenda, dll.) memakai DHCP:
+ * 1. 100 s/d 150 (Default TP-Link/D-Link paling sering digunakan)
+ * 2. 2 s/d 50 (Tenda / Totolink / IP awal)
+ * 3. 151 s/d 200
+ * 4. 51 s/d 99
+ * 5. 201 s/d 254
+ */
+function getPrioritizedHostIps() {
+  const ips = [];
+  // Batch prioritas #1: 100 - 150
+  for (let i = 100; i <= 150; i++) ips.push(i);
+  // Batch prioritas #2: 2 - 50
+  for (let i = 2; i <= 50; i++) ips.push(i);
+  // Batch prioritas #3: 151 - 200
+  for (let i = 151; i <= 200; i++) ips.push(i);
+  // Batch prioritas #4: 51 - 99
+  for (let i = 51; i <= 99; i++) ips.push(i);
+  // Batch prioritas #5: 201 - 254
+  for (let i = 201; i <= 254; i++) ips.push(i);
+  return ips;
+}
+
+/**
+ * Pindai kumpulan URL secara paralel dan LANGSUNG selesaikan begitu ada 1 server yang merespons OK.
+ * Tidak perlu menunggu IP lain yang timeout!
+ */
+function probeBatchFast(urls, timeoutMs = SCAN_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    let pending = urls.length;
+    let finished = false;
+
+    if (pending === 0) return resolve(null);
+
+    urls.forEach((url) => {
+      probeServer(url, timeoutMs).then((ok) => {
+        if (finished) return;
+        if (ok) {
+          finished = true;
+          resolve(url);
+        } else {
+          pending--;
+          if (pending === 0) {
+            resolve(null);
+          }
+        }
+      });
+    });
+  });
+}
+
+/**
+ * Scan subnet dengan prioritas IP DHCP dan fast-resolve
  */
 async function scanSubnet(subnet, port = SERVER_PORT, onProgress = null, excludeUrl = null) {
-  console.log(`[Discovery] Scanning subnet ${subnet}.1-254 pada port ${port}...`);
-  const BATCH_SIZE = 50;
-  const total = 254;
+  console.log(`[Discovery] Scanning subnet ${subnet}.x pada port ${port}...`);
+  const hostIps = getPrioritizedHostIps();
+  const BATCH_SIZE = 55; // Pindai 55 IP sekaligus dalam 1 batch
+  const total = hostIps.length;
 
-  for (let start = 1; start <= total; start += BATCH_SIZE) {
-    const end = Math.min(start + BATCH_SIZE - 1, total);
-    const batch = [];
+  for (let start = 0; start < total; start += BATCH_SIZE) {
+    const slice = hostIps.slice(start, start + BATCH_SIZE);
+    const urls = [];
 
-    for (let i = start; i <= end; i++) {
-      const ip = `${subnet}.${i}`;
-      const url = `http://${ip}:${port}`;
+    for (const host of slice) {
+      const url = `http://${subnet}.${host}:${port}`;
       if (excludeUrl && url.replace(/\/+$/, '') === excludeUrl.replace(/\/+$/, '')) {
         continue;
       }
-      batch.push(
-        probeServer(url, SCAN_TIMEOUT_MS).then(ok => (ok ? url : null))
-      );
+      urls.push(url);
     }
 
-    if (onProgress) onProgress(Math.round((start / total) * 100));
+    if (onProgress) {
+      const pct = Math.min(Math.round(((start + slice.length) / total) * 100), 98);
+      onProgress(pct);
+    }
 
-    const results = await Promise.all(batch);
-    const found = results.find(r => r !== null);
+    // Jalankan batch: jika ada server merespons, langsung return dalam ~10ms!
+    const found = await probeBatchFast(urls, SCAN_TIMEOUT_MS);
     if (found) {
-      console.log('[Discovery] Server ditemukan via scan:', found);
+      console.log('[Discovery] Server ditemukan kilat:', found);
       return found;
     }
   }
+
   return null;
 }
 
 /**
- * Auto-discover server: cache -> mDNS -> scan subnet
+ * Auto-discover server: cache -> mDNS -> scan subnet kilat
  * @param {Function} onProgress - callback(percent, message)
  * @param {Object} options - { failedUrl?: string }
  * @returns {Promise<string|null>} URL server atau null
@@ -155,7 +210,7 @@ export async function discoverServer(onProgress = null, options = {}) {
     } else {
       console.log('[Discovery] Cache hit, verifying:', cached);
       if (onProgress) onProgress(10, 'Memeriksa server terakhir...');
-      const still_ok = await probeServer(cached);
+      const still_ok = await probeServer(cached, 600);
       if (still_ok) {
         if (onProgress) onProgress(100, 'Server ditemukan!');
         return cached;
@@ -164,8 +219,8 @@ export async function discoverServer(onProgress = null, options = {}) {
     }
   }
 
-  // 2. Coba mDNS (paddleocr.local)
-  if (onProgress) onProgress(15, 'Mencari via mDNS (paddleocr.local)...');
+  // 2. Coba mDNS cepat (paddleocr.local)
+  if (onProgress) onProgress(15, 'Mengecek paddleocr.local...');
   const mdnsResult = await tryMdns(targetPort);
   if (mdnsResult && (!failedUrl || mdnsResult.replace(/\/+$/, '') !== failedUrl)) {
     setCachedServer(mdnsResult);
@@ -173,31 +228,28 @@ export async function discoverServer(onProgress = null, options = {}) {
     return mdnsResult;
   }
 
-  // 3. Kumpulkan subnet kandidat
-  if (onProgress) onProgress(20, 'Mendeteksi subnet jaringan WiFi...');
-  const knownSubnet = extractSubnet(failedUrl) || extractSubnet(localStorage.getItem('pcServerUrl'));
+  // 3. Kumpulkan subnet kandidat dengan 192.168.0 sebagai PRIORITAS UTAMA (gateway 192.168.0.1)
+  if (onProgress) onProgress(20, 'Memindai subnet 192.168.0.x...');
   const detectedSubnet = await getLocalSubnet();
+  const knownSubnet = extractSubnet(failedUrl) || extractSubnet(localStorage.getItem('pcServerUrl'));
 
+  // Susunan prioritas: 192.168.0 SELALU PERTAMA karena gateway pengguna adalah 192.168.0.1
   const candidateSubnets = [
-    knownSubnet,
-    detectedSubnet,
+    '192.168.0',          // Gateway 192.168.0.1 (TOP PRIORITY)
+    knownSubnet,          // Subnet sebelumnya jika berbeda
+    detectedSubnet,       // Dari WebRTC jika ada
     '192.168.1',
-    '192.168.0',
     '192.168.100',
     '192.168.18',
-    '192.168.43',
-    '192.168.2',
-    '10.0.0',
-    '172.20.10'
+    '192.168.43'
   ].filter(Boolean);
 
-  // Buat urutan unik: subnet lama/terdeteksi dicoba paling awal
   const subnetsToTry = [...new Set(candidateSubnets)];
 
   for (let sIdx = 0; sIdx < subnetsToTry.length; sIdx++) {
     const sub = subnetsToTry[sIdx];
     const basePct = 25 + Math.round((sIdx / subnetsToTry.length) * 70);
-    if (onProgress) onProgress(basePct, `Scanning ${sub}.x...`);
+    if (onProgress) onProgress(basePct, `Scan ${sub}.x...`);
 
     const result = await scanSubnet(sub, targetPort, (pct) => {
       if (onProgress) {
