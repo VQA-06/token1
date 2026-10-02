@@ -180,6 +180,9 @@ export async function processReceipt(imageSource, mode = 'token', onStatusUpdate
   } catch (error) {
     console.warn('[OCR Client] Server PC Offline / Tidak Terjangkau:', error.message);
     serverAvailable = false;
+    if (typeof window !== 'undefined' && typeof window.__triggerServerAutoDiscovery === 'function') {
+      window.__triggerServerAutoDiscovery();
+    }
   }
 
   // 3. Automatic Fallback to In-Browser Tesseract OCR if PC Server is offline

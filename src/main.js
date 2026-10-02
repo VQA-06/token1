@@ -92,96 +92,107 @@ const pcServerUrlInput = document.getElementById('pc-server-url-input');
 const testServerBtn = document.getElementById('test-server-btn');
 const serverTestResult = document.getElementById('server-test-result');
 
+// Auto-discovery state
+let isAutoDiscovering = false;
+let lastAutoDiscoverTime = 0;
+const AUTO_DISCOVER_COOLDOWN_MS = 25000; // Cooldown 25 detik antar auto-scan background agar hemat resource
+
 /**
- * Check and refresh server status badge
+ * Check and refresh server status badge.
+ * Jika status server PC terdeteksi offline (misalnya server ON namun IP berubah karena DHCP/WiFi),
+ * secara otomatis memindai subnet dan jaringan lokal untuk menemukan IP baru server PaddleOCR.
  */
 export async function refreshServerStatus(showToastFeedback = false, isBackground = false) {
   if (!serverStatusBadge || !serverStatusText) return;
+
+  // Jika sedang dalam proses auto-scan, biarkan berjalan jangan ditimpa
+  if (isAutoDiscovering) return;
+
+  const currentUrl = getPcServerUrl();
 
   if (!isBackground) {
     serverStatusBadge.className = 'server-badge badge-checking';
     serverStatusText.textContent = 'Mengecek PC...';
   }
 
-  const currentUrl = getPcServerUrl();
-  const health = await checkPcServerHealth(currentUrl, 3000);
-
+  const health = await checkPcServerHealth(currentUrl, 2500);
   if (health.online) {
-    // Reset flag offline-count saat berhasil
-    refreshServerStatus._offlineCount = 0;
     serverStatusBadge.className = 'server-badge badge-online';
     serverStatusText.textContent = 'PC: PaddleOCR Online';
-    serverStatusBadge.title = 'Server PC aktif & terhubung! PaddleOCR akan digunakan sebagai mesin utama. Klik untuk refresh.';
+    serverStatusBadge.title = `Server PC aktif & terhubung (${currentUrl || 'localhost'}). PaddleOCR siap digunakan. Klik untuk refresh/cek IP.`;
     if (showToastFeedback) showToast('🟢 Server PC Online (PaddleOCR Siap)', 2500);
     return;
   }
 
-  // Server offline — tandai dan tampilkan status sementara
-  refreshServerStatus._offlineCount = (refreshServerStatus._offlineCount || 0) + 1;
+  // --- SERVER TERDETEKSI OFFLINE ---
+  // Otomatis scan IP baru jika dipanggil manual (klik badge / toast) atau cooldown background tercapai
+  const now = Date.now();
+  const shouldScan = !isBackground || (now - lastAutoDiscoverTime > AUTO_DISCOVER_COOLDOWN_MS);
 
-  // Hindari scan concurrent (scan hanya 1 instance sekaligus)
-  if (refreshServerStatus._isDiscovering) {
-    // Sudah ada scan berjalan, cukup update badge
-    serverStatusBadge.className = 'server-badge badge-checking';
-    serverStatusText.textContent = '🔍 Mencari server...';
-    return;
-  }
-
-  // Trigger discovery setelah offline 2x berturut-turut (hindari false-positive 1 gagal saja)
-  const shouldDiscover = refreshServerStatus._offlineCount >= 2;
-
-  if (!shouldDiscover) {
+  if (!shouldScan) {
     serverStatusBadge.className = 'server-badge badge-offline';
     serverStatusText.textContent = 'PC Offline (Tesseract Backup)';
-    serverStatusBadge.title = `Server tidak merespons. Tesseract OCR aktif sebagai cadangan. Klik untuk refresh.`;
-    if (showToastFeedback) showToast('🟡 Server PC Offline. Tesseract Backup aktif.', 3000);
+    serverStatusBadge.title = `Server PC tidak terhubung (${health.error || 'offline'}). Tesseract OCR aktif sebagai cadangan. Klik untuk scan IP baru.`;
     return;
   }
 
-  // Mulai auto-discovery
-  refreshServerStatus._isDiscovering = true;
-  refreshServerStatus._offlineCount = 0;
-
-  // Hapus URL lama yang sudah tidak valid agar discovery berjalan fresh
-  clearDiscoveryCache();
-  setPcServerUrl('');
-  if (pcServerUrlInput) pcServerUrlInput.value = '';
-
+  // Jalankan auto-discovery memindai subnet jaringan lokal
+  isAutoDiscovering = true;
   serverStatusBadge.className = 'server-badge badge-checking';
-  serverStatusText.textContent = '🔍 Mencari server...';
-  serverStatusBadge.title = 'IP server berubah, sedang mencari ulang di jaringan lokal...';
+  serverStatusText.textContent = '🔍 Mencari IP server...';
+  serverStatusBadge.title = `IP server offline. Sedang memindai jaringan lokal untuk mencari IP baru server PaddleOCR...`;
 
   try {
     const discovered = await discoverServer((pct, msg) => {
-      if (serverStatusText) serverStatusText.textContent = `🔍 ${msg}`;
-    });
+      if (serverStatusText && isAutoDiscovering) {
+        serverStatusText.textContent = `🔍 ${msg}`;
+      }
+    }, { failedUrl: currentUrl });
 
     if (discovered) {
       setPcServerUrl(discovered);
-      if (pcServerUrlInput) pcServerUrlInput.value = discovered;
+      if (pcServerUrlInput) {
+        pcServerUrlInput.value = discovered;
+      }
       serverStatusBadge.className = 'server-badge badge-online';
       serverStatusText.textContent = 'PC: PaddleOCR Online';
-      serverStatusBadge.title = `Server ditemukan otomatis: ${discovered}. Klik untuk refresh.`;
-      showToast(`✅ Server ditemukan: ${discovered}`, 4000);
+      serverStatusBadge.title = `Server PC aktif di ${discovered}. Klik untuk refresh.`;
+      showToast(`✅ Server terdeteksi di IP baru: ${discovered}`, 4000);
     } else {
+      lastAutoDiscoverTime = Date.now();
       serverStatusBadge.className = 'server-badge badge-offline';
       serverStatusText.textContent = 'PC Offline (Tesseract Backup)';
-      serverStatusBadge.title = 'Server tidak ditemukan di jaringan lokal. Tesseract aktif. Klik untuk coba lagi.';
-      if (showToastFeedback) showToast('🟡 Server tidak ditemukan. Tesseract Backup aktif.', 3000);
+      serverStatusBadge.title = `Server PC tidak ditemukan di jaringan lokal. Tesseract OCR otomatis aktif sebagai cadangan. Klik untuk scan ulang IP.`;
+      if (showToastFeedback) {
+        showToast('🟡 Server PC tidak ditemukan di jaringan lokal.', 3000);
+      }
     }
+  } catch (err) {
+    console.error('[AutoDiscovery Error]:', err);
+    lastAutoDiscoverTime = Date.now();
+    serverStatusBadge.className = 'server-badge badge-offline';
+    serverStatusText.textContent = 'PC Offline (Tesseract Backup)';
   } finally {
-    refreshServerStatus._isDiscovering = false;
+    isAutoDiscovering = false;
   }
 }
 
+// Global hook agar bisa dipicu jika request OCR gagal di tengah jalan
+window.__triggerServerAutoDiscovery = () => {
+  lastAutoDiscoverTime = 0;
+  refreshServerStatus(false, false);
+};
+
 if (serverStatusBadge) {
-  serverStatusBadge.addEventListener('click', () => refreshServerStatus(true));
+  serverStatusBadge.addEventListener('click', () => {
+    lastAutoDiscoverTime = 0;
+    refreshServerStatus(true, false);
+  });
 }
 
-// Initial status check and periodic check every 3 seconds (real-time)
+// Initial status check and periodic check every 4 seconds
 refreshServerStatus();
-setInterval(() => refreshServerStatus(false, true), 3000);
-
+setInterval(() => refreshServerStatus(false, true), 4000);
 
 
 
