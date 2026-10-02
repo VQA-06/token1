@@ -68,11 +68,7 @@ export function extractPort(url) {
  */
 function getPrioritizedHostIps() {
   const ips = [];
-  for (let i = 100; i <= 150; i++) ips.push(i); // Prioritas 1
-  for (let i = 2;   i <= 50;  i++) ips.push(i);  // Prioritas 2
-  for (let i = 151; i <= 200; i++) ips.push(i); // Prioritas 3
-  for (let i = 51;  i <= 99;  i++) ips.push(i);  // Prioritas 4
-  for (let i = 201; i <= 254; i++) ips.push(i); // Prioritas 5
+  for (let i = 2; i <= 254; i++) ips.push(i); // Urutan dari terkecil ke terbesar
   return ips;
 }
 
